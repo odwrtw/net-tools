@@ -1,0 +1,38 @@
+#!/bin/sh
+set -e
+
+# update interval in seconds
+INTERVAL="1"
+
+_usage() {
+	echo "usage: $0 [network-interface]"
+	echo "  eg: $0 eth0"
+	echo "shows packets-per-second"
+	exit 1
+}
+[ "$1" ] || _usage
+
+_stat() {
+	dev=$1
+	stat=$2
+	cat "/sys/class/net/$dev/statistics/$stat"
+}
+
+dev=$1
+[ -d "/sys/class/net/$dev" ] || {
+	echo "$dev not found"
+	exit 1
+}
+
+while  true
+do
+	r1=$(_stat "$dev" "rx_packets")
+	t1=$(_stat "$dev" "tx_packets")
+	sleep "$INTERVAL"
+	r2=$(_stat "$dev" "rx_packets")
+	t2=$(_stat "$dev" "tx_packets")
+
+	tx_pps=$((t2 - t1))
+	rx_pps=$((r2 - r1))
+	echo  "[$dev] tx: $tx_pps pkts/s / rx $dev : $rx_pps pkts/s"
+done
