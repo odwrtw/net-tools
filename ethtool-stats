@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+_usage() {
+	echo "usage: $0 [network-interface]"
+	echo "  eg: $0 eth0"
+	echo "shows non zero statistics of a device"
+	exit 1
+}
+[ "$1" ] || _usage
+
+dev=$1
+[ -d "/sys/class/net/$dev" ] || {
+	echo "$dev not found"
+	exit 1
+}
+
+watch -n 1 \
+	"ethtool -S $dev | grep -E '(err|miss|drop|disca|buff)' | grep -v ': 0'"
