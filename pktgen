@@ -1,0 +1,121 @@
+#!/bin/sh
+
+_err() {
+	echo "$@"
+	exit 1
+}
+
+_usage() {
+	echo "Usage: $(basename "$0") [ OPTIONS ]"
+	echo ""
+	echo "Options:"
+	echo "    --ip        IP address to send packets to"
+	echo "    --pps       Number of packets per seconds to send [default=1000]"
+	echo "    --cpu       Number of CPUs to be used [default=1]"
+	echo "    -p          Total number of packets send [default=10^12]"
+	echo "    -s          Size of the packets to send [default=1500]"
+
+	exit 1
+}
+
+pgset() {
+	echo "$1" > "$PGDEV"
+}
+
+_get_out_iface() {
+	OUT_IFACE=$(ip -j route get "$IP" | jq -r '.[0].dev')
+	[ "$OUT_IFACE" ] || _err "failed to get out interface"
+}
+
+_get_out_mac() {
+	DST_MAC=$(ip -j neighbor show "$IP" | jq -r '.[0].lladdr')
+	[ "$DST_MAC" ] || _err "failed to get dest MAC address, check ip neighbor"
+}
+
+_generate_pkts() {
+	PKTS=$(echo "scale=0; $PACKETS/$CPU_NB" | bc)
+	RATEP=$(echo "scale=0; $PPS/$CPU_NB" | bc)
+	CLONE_SKB="clone_skb 10"
+	PKT_SIZE="pkt_size $PACKET_SIZE"
+	COUNT="count $PKTS"
+	DELAY="delay 0"
+	DST="$IP"
+	ETH="$OUT_IFACE"
+
+	echo "Launching with PKTS=$PKTS RATEP=$RATEP PKT_SIZE=$PKT_SIZE COUNT=$COUNT DST=$DST ETH=$ETH DST_MAC=$DST_MAC"
+
+	PGDEV=/proc/net/pktgen/pgctrl
+
+	pgset "reset"
+
+	for cpu in $(seq 0 "$((CPU_NB-1))")
+	do
+		PGDEV=/proc/net/pktgen/kpktgend_$cpu
+		pgset "rem_device_all"
+	done
+
+	for processor in $(seq 0 "$((CPU_NB-1))")
+	do
+		PGDEV=/proc/net/pktgen/kpktgend_$processor
+		pgset "add_device $ETH@$processor"
+		PGDEV=/proc/net/pktgen/$ETH@$processor
+
+		pgset "$COUNT"
+		pgset "flag QUEUE_MAP_CPU"
+		pgset "$CLONE_SKB"
+		pgset "$PKT_SIZE"
+		pgset "$DELAY"
+		pgset "ratep $RATEP"
+		pgset "dst $DST"
+		pgset "dst_mac $DST_MAC"
+
+		pgset "udp_src_min 9"   #  set UDP source port min, If < udp_src_max, then
+		pgset "udp_src_max 90"  #  set UDP source port max.
+		pgset "udp_dst_min 9"   #  set UDP destination port min, If < udp_dst_max, then
+		pgset "udp_dst_max 90"  #  set UDP destination port max.
+	done
+
+	# Time to run
+	PGDEV=/proc/net/pktgen/pgctrl
+
+	echo "Running... ctrl^C to stop"
+	pgset "start"
+	echo "Done"
+}
+
+# Default values
+CPU_NB=1
+PACKET_SIZE=1500
+PACKETS=1000000000000
+PPS=1000
+
+while true; do
+	case "$1" in
+		--ip)
+			IP=$2;
+			shift 2;;
+		--pps)
+			PPS=$2
+			shift 2;;
+		-p)
+			PACKETS="$2"
+			shift 2 ;;
+		-s)
+			PACKET_SIZE="$2"
+			shift 2 ;;
+		--cpu)
+			CPU_NB="$2"
+			shift 2 ;;
+		--help|-h)
+			_usage
+			;;
+		* ) break ;;
+	esac
+
+done
+
+[ "$IP" ] || _usage
+
+_get_out_iface
+_get_out_mac
+_generate_pkts
