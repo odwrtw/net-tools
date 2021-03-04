@@ -1,0 +1,15 @@
+#!/bin/sh
+
+PORT_START=800
+
+pkill iperf3 >/dev/null 2>/dev/null
+
+count=${1:-10}
+
+for i in $(seq 1 "$count")
+do
+	iperf3 \
+		--server \
+		--port "$((PORT_START+i))" \
+		--daemon
+done

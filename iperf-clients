@@ -1,0 +1,29 @@
+#!/bin/sh
+
+MAX_CLIENT=10
+PARALLEL=5
+PORT_START=800
+
+server="$1"
+time="${2:-10}"
+
+[ "$1" ] || {
+	echo "Missing server"
+	exit 1
+}
+[ "$2" ] && shift
+shift
+
+pkill -f 'iperf3 --client' && sleep 3
+
+for i in $(seq 1 "$MAX_CLIENT"); do
+	iperf3 \
+		--client "$server" \
+		--interval 1 \
+		--port $((PORT_START+i)) \
+		--time "$time" \
+		--parallel "$PARALLEL" \
+		--zerocopy \
+		"$@" \
+		>> /dev/null 2>&1 &
+done
