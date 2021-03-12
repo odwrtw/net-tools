@@ -28,7 +28,12 @@ _get_out_iface() {
 }
 
 _get_out_mac() {
-	DST_MAC=$(ip -j neighbor show "$IP" | jq -r '.[0].lladdr')
+	IP_TMP="$IP"
+	# Check if we need to route
+	gw=$(ip -j route get "$IP" | jq -r '.[0].gateway')
+	# Update the DST_MAC if we do
+	[ "$gw" = "null" ] || IP_TMP="$gw"
+	DST_MAC=$(ip -j neighbor show "$IP_TMP" | jq -r '.[0].lladdr')
 	[ "$DST_MAC" ] || _err "failed to get dest MAC address, check ip neighbor"
 }
 
