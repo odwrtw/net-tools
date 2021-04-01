@@ -88,6 +88,10 @@ _generate_pkts() {
 	echo "Done"
 }
 
+# Load pktgen
+module_loaded=$(lsmod | grep -c pktgen)
+[ "$module_loaded" = 0 ] && modprobe pktgen
+
 # Default values
 CPU_NB=1
 PACKET_SIZE=1500
