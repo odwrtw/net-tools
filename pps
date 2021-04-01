@@ -27,12 +27,20 @@ dev=$1
 while  true
 do
 	r1=$(_stat "$dev" "rx_packets")
+	rd1=$(_stat "$dev" "rx_dropped")
 	t1=$(_stat "$dev" "tx_packets")
+	td1=$(_stat "$dev" "tx_dropped")
+
 	sleep "$INTERVAL"
+
 	r2=$(_stat "$dev" "rx_packets")
+	rd2=$(_stat "$dev" "rx_dropped")
 	t2=$(_stat "$dev" "tx_packets")
+	td2=$(_stat "$dev" "tx_dropped")
 
 	tx_pps=$((t2 - t1))
+	tx_dropped_pps=$((td2 - td1))
 	rx_pps=$((r2 - r1))
-	echo  "[$dev] tx: $tx_pps pkts/s / rx $dev : $rx_pps pkts/s"
+	rx_dropped_pps=$((rd2 - rd1))
+	echo  "[$dev] tx: $tx_pps (dropped: $tx_dropped_pps) pkts/s / rx $dev : $rx_pps (dropped: $rx_dropped_pps) pkts/s"
 done
