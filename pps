@@ -5,8 +5,8 @@ set -e
 INTERVAL="1"
 
 _usage() {
-	echo "usage: $0 [network-interface]"
-	echo "  eg: $0 eth0"
+	echo "usage: $0 DEVICE..."
+	echo "  eg: $0 eth0 eth1 ..."
 	echo "shows packets-per-second"
 	exit 1
 }
@@ -18,29 +18,44 @@ _stat() {
 	cat "/sys/class/net/$dev/statistics/$stat"
 }
 
-dev=$1
-[ -d "/sys/class/net/$dev" ] || {
-	echo "$dev not found"
-	exit 1
-}
+title=
+for dev in "$@"; do
+	title=${title:+$title+$dev}
+	title=${title:-$dev}
+done
 
 while  true
 do
-	r1=$(_stat "$dev" "rx_packets")
-	rd1=$(_stat "$dev" "rx_dropped")
-	t1=$(_stat "$dev" "tx_packets")
-	td1=$(_stat "$dev" "tx_dropped")
+	r1=;rd1=;rb1=;t1=;td1=;tb1=
+	r2=;rd2=;rb2=;t2=;td2=;tb2=
+
+	for dev in "$@"; do
+		r1=$((r1+$(_stat "$dev" "rx_packets")))
+		rd1=$((rd1+$(_stat "$dev" "rx_dropped")))
+		rb1=$((rb1+$(_stat "$dev" "rx_bytes")))
+		t1=$((t1+$(_stat "$dev" "tx_packets")))
+		td1=$((td1+$(_stat "$dev" "tx_dropped")))
+		tb1=$((tb1+$(_stat "$dev" "tx_bytes")))
+	done
 
 	sleep "$INTERVAL"
 
-	r2=$(_stat "$dev" "rx_packets")
-	rd2=$(_stat "$dev" "rx_dropped")
-	t2=$(_stat "$dev" "tx_packets")
-	td2=$(_stat "$dev" "tx_dropped")
+	for dev in "$@"; do
+		r2=$((r2+$(_stat "$dev" "rx_packets")))
+		rd2=$((rd2+$(_stat "$dev" "rx_dropped")))
+		rb2=$((rb2+$(_stat "$dev" "rx_bytes")))
+		t2=$((t2+$(_stat "$dev" "tx_packets")))
+		td2=$((td2+$(_stat "$dev" "tx_dropped")))
+		tb2=$((tb2+$(_stat "$dev" "tx_bytes")))
+	done
 
 	tx_pps=$((t2 - t1))
 	tx_dropped_pps=$((td2 - td1))
+	tx_bytes=$((tb2 - tb1))
 	rx_pps=$((r2 - r1))
 	rx_dropped_pps=$((rd2 - rd1))
-	echo  "[$dev] tx: $tx_pps (dropped: $tx_dropped_pps) pkts/s / rx $dev : $rx_pps (dropped: $rx_dropped_pps) pkts/s"
+	rx_bytes=$((rb2 - rb1))
+	printf	"[%s] tx: %9d (dropped: %4d) pkts/s %6d Mb/s rx: %9d (dropped: %4d) pkts/s %6d Mb/s\n" \
+		"$title" "$tx_pps" "$tx_dropped_pps" "$((tx_bytes*8/1000000))" \
+		"$rx_pps" "$rx_dropped_pps" "$((rx_bytes*8/1000000))"
 done
